@@ -1,0 +1,25 @@
+---
+context: null
+aliases:
+- uncertainty
+title: Uncertainty
+domain:
+- ''
+---
+
+# Uncertainty
+
+Even the most uncertain environments usually contain some information.
+- often there are trends
+- some factors could be knowable through analysis
+
+```dataviewjs
+const file = dv.current().file.name
+const pages = dv.pages().where(page => {
+  if (page.up && page.up.values != null && page.up.values.includes(file)) {
+    return page
+  }
+}).sort(k => k.file.name, 'asc')
+
+dv.list(pages.file.link)
+```
