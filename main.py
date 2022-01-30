@@ -1,3 +1,4 @@
+from curses import typeahead
 import os
 import re
 import glob
@@ -6,18 +7,28 @@ from editfrontmatter import EditFrontMatter
 
 def main():
 
-    INPUT_PATH = "Real/"
-    OUTPUT_PATH = "out/"
+    INPUT_PATH = "../../../Fork my Brain/Brain/"
+    OUTPUT_PATH = "../../../digital/brain/"
 
     for filename in glob.glob(os.path.join(INPUT_PATH, "*.md")):
         with open(os.path.join(os.getcwd(), filename), "r") as f:
             fileCommands(OUTPUT_PATH, filename)
 
-
-def canPublish_func(val):
-    print(val)
-    return True
-
+def getType(field):
+  if type(field) == list:
+    field = field[0]
+    
+  match field:
+    case 'People':
+      return "'person'"
+    case 'Company':
+      return "'company'"
+    case 'Software, Applications':
+      return "'application'"
+    case _:
+      return ''
+    
+    
 
 def fileCommands(OUTPUT_PATH, filename):
     # # initialize `template_str` with template file content
@@ -26,47 +37,87 @@ def fileCommands(OUTPUT_PATH, filename):
     # instantiate the processor
     proc = EditFrontMatter(file_path=filename, template_str=template_str)
 
-    # set fields to delete from yaml
-    proc.keys_toDelete = [
-        "description",
-        "source",
-        "created",
-        "modified",
-        "up",
-        "tags",
-        "down",
-        "type",
-    ]
+    beforeRegex = proc.dumpFileData()
+    # remove yaml fields between `---`
+    beforeRegex = re.sub(r"---\n(.*?)\n---", "", beforeRegex, flags=re.DOTALL)
 
-    # add a filter and callback function
-    proc.add_JinjaFilter("context", canPublish_func)
+    # find all lines that contain the string "source::" excluding the final "]"
+    source = re.findall(r"source::(.*?)\]", beforeRegex)
+    if source == []:
+        source = ""
 
     # print filename
-    titleMD = filename.split("/")[-1]
-    title = titleMD.split(".")[0]
-    titleLowerMD = titleMD.lower()
-    titleLower = titleLowerMD.split(".")[0]
+    title = filename.split("/")[-1].split(".")[0]
+    titleLower = title.lower()
+    titleNoCommaTitleCase = title.replace(",", "").title()
+
+    # tags
+    if proc.fmatter.get("tags") == None:
+        tags = ""
+    else:
+        tags = proc.fmatter.get("tags")
 
     # if titleLower contains "," then split
-    parent = titleLower.split(",")[0]
+    if titleLower.find(",") != -1:
+        parent = titleLower.split(",")[0]
+    elif proc.fmatter.get("up") != None:
+        parent = proc.fmatter.get("up")[0].lower()
+    else:  # if no parent, then use title
+        parent = ""
 
-    # populate variables and run processor
-    proc.run(
-        {
-            "title": title.replace("'", " "),
-            "domain": [""],
-            "parent": parent,
-            "aliases": titleLower,
-        }
+    # replace the title
+    removeTitle = re.sub(r"\s# .*", "", beforeRegex)
+
+    # replace the brackets (also looking at | because of aliases)
+    replaceBrackets = (
+        re.sub(r"\[\[.*?\|", "", removeTitle).replace("]]", "").replace("[[", "")
+    )
+    replaceBrackets = re.sub(r"\[\^.*?\]", "", replaceBrackets)
+
+    # if line starts with ": [source::" then remove it
+    replaceBrackets = re.sub(r": \[source::.*?\]", "", replaceBrackets)
+
+   
+    myType = getType(proc.fmatter.get("up"))
+      
+      
+    def strList(list):
+        # if list is string then return string
+        if type(list) == str:
+            if list == "":
+                return "\n"
+            else:
+                return "['" + list + "']\n"
+        string = ""
+        for item in list:
+            string += "\n- '" + item + "'"
+        return string + "\n"
+
+    yaml = (
+        "---\n"
+        + "tags: "
+        + strList(tags)
+        + "type: "
+        + myType + "\n"
+        + "title: '"
+        + titleNoCommaTitleCase
+        + "'\n"
+        + "domain: \n"
+        + "parent: "
+        + strList(parent)
+        + "aliases: "
+        + strList([title])
+        + "children: \n"
+        + "context: \n"
+        + "source: "
+        + strList(source)
+        + "---\n"
     )
 
-    # delete everything between and including every "[[" and the next "|"
-    beforeRegex = proc.dumpFileData()
-    new = re.sub(r"\[\[.*?\|", "", beforeRegex).replace("]]", "")
-
+    finalString = yaml + replaceBrackets
     # create markdown file and fill with proc.dumpFileData()
-    with open(os.path.abspath(OUTPUT_PATH + titleLowerMD), "w") as f:
-        f.write(new)
+    with open(os.path.abspath(OUTPUT_PATH + titleLower + ".md"), "w") as f:
+        f.write(finalString)
 
 
 if __name__ == "__main__":
