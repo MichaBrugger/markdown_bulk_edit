@@ -1,4 +1,3 @@
-from curses import typeahead
 import os
 import re
 import glob
@@ -14,10 +13,12 @@ def main():
         with open(os.path.join(os.getcwd(), filename), "r") as f:
             fileCommands(OUTPUT_PATH, filename)
 
+# specific function that takes the type property (list/string) and returns some stuff specific to my vault
 def getType(field):
   if type(field) == list:
     field = field[0]
-    
+  
+  # return based on string
   match field:
     case 'People':
       return "'person'"
@@ -25,23 +26,31 @@ def getType(field):
       return "'company'"
     case 'Software, Applications':
       return "'application'"
+    # base case
     case _:
-      return ''
+      return ['daily', 'thought']
     
     
 
 def fileCommands(OUTPUT_PATH, filename):
-    # # initialize `template_str` with template file content
+    # tbh this is somewhat of a remnant of a time I used jinja templates for the frontmatter
+    # the templates are currently read in, but nothing is really done with it, so best just leave it
     template_str = "".join(open(os.path.abspath("template1.j2"), "r").readlines())
 
     # instantiate the processor
     proc = EditFrontMatter(file_path=filename, template_str=template_str)
 
+    # turns the frontmatter into a string
     beforeRegex = proc.dumpFileData()
+    
+    # from here onward it's basically up to you what you want to do with your stuff
+    # ---------------------------------------------------------------------------------
+    
     # remove yaml fields between `---`
     beforeRegex = re.sub(r"---\n(.*?)\n---", "", beforeRegex, flags=re.DOTALL)
 
     # find all lines that contain the string "source::" excluding the final "]"
+    # once again this was specific for my vault
     source = re.findall(r"source::(.*?)\]", beforeRegex)
     if source == []:
         source = ""
@@ -93,6 +102,7 @@ def fileCommands(OUTPUT_PATH, filename):
             string += "\n- '" + item + "'"
         return string + "\n"
 
+    # finally creating the yaml string from all those variables created above
     yaml = (
         "---\n"
         + "tags: "
